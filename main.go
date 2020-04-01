@@ -235,10 +235,10 @@ func (h *handler) generateNoticeHTML(userID string, question string, choices map
 	}
 
 	format := `
-	<b>New poll from <a href="https://matrix.to/#/%s">%s</a>!</b><br><br>
-	Question: <i><u>%s</u></i><br>
-	Cast your vote by clicking on the reactions under this message (if available).<br><br>
-	Choices:<br>
+	<b>Nueva pregunta de <a href="https://matrix.to/#/%s">%s</a>!</b><br><br>
+	Pregunta: <i><u>%s</u></i><br>
+	Para votar, clickear en los emojis. <br><br>
+	Opciones:<br>
 	`
 
 	notice := fmt.Sprintf(format, userID, displayName, question)
