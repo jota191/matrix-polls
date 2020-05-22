@@ -1,4 +1,4 @@
-module github.com/babolivier/matrix-poll-bot
+module github.com/jota191/matrix-polls
 
 go 1.12
 
