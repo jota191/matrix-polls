@@ -44,10 +44,11 @@ type handler struct {
 	StartingSpacesRegexp *regexp.Regexp
 }
 
-func newHandler(homeserverURL, userID, accessToken string) (h *handler, err error) {
+func newHandler(homeserverURL, userID, accessToken string) (h *handler, err error){
 	h = new(handler)
 
-	h.Client, err = gomatrix.NewClient(homeserverURL, userID, accessToken)
+	h.Client, err =
+		gomatrix.NewClient(homeserverURL, userID, accessToken)
 	if err != nil {
 		return
 	}
@@ -78,13 +79,20 @@ func (h *handler) setupFilter() string {
 			},
 		},
 		EventFields: []string{
-			"type",               // Needed to register the handlers.
-			"event_id",           // Needed for logging.
-			"room_id",            // Needed to manage the rooms we're in.
-			"state_key",          // Needed for the syncer to manage the room's state.
-			"sender",             // Needed to mention the poll's author.
-			"content.body",       // Needed to process messages.
-			"content.membership", // Needed to process invites.
+			"type",
+			// Needed to register the handlers.
+			"event_id",
+			// Needed for logging.
+			"room_id",
+			// Needed to manage the rooms we're in.
+			"state_key",
+			// Needed for the syncer to manage the room's state.
+			"sender",             
+			// Needed to mention the poll's author.
+			"content.body",
+			// Needed to process messages.
+			"content.membership",
+			// Needed to process invites.
 		},
 	}
 
@@ -114,7 +122,8 @@ func (h *handler) handleMessage(event *gomatrix.Event) {
 	question, choices, errMsg := h.parseMessage(body)
 	if len(errMsg) > 0 {
 		// Send the error message as a notice to the room.
-		if _, err := h.Client.SendNotice(event.RoomID, errMsg); err != nil {
+		if _, err := h.Client.SendNotice(event.RoomID, errMsg);
+		err != nil {
 			logger.WithField("errMsg", errMsg).Errorf("Failed to send error message: %s", err.Error())
 		}
 		return
@@ -125,37 +134,27 @@ func (h *handler) handleMessage(event *gomatrix.Event) {
 		return
 	}
 
-	// Generate the HTML string to send as a notice.
-	notice := h.generateNoticeHTML(event.Sender, question, choices)
-
-	// Send the poll to the room.
-	res, err := h.Client.SendMessageEvent(
-		event.RoomID, "m.room.message", gomatrix.GetHTMLMessage("m.notice", notice),
-	)
-	if err != nil {
-		logger.Errorf("Couldn't send poll to room: %s", err.Error())
-		return
-	}
-
 	// Add reactions to the poll message.
 	for k := range choices {
 		content := reaction{}
 		content.RelatesTo.RelType = "m.annotation"
 		content.RelatesTo.Key = k
-		content.RelatesTo.EventID = res.EventID
+		content.RelatesTo.EventID = event.ID
 
-		if _, err := h.Client.SendMessageEvent(event.RoomID, "m.reaction", &content); err != nil {
-			logger.WithField("poll_event_id", res.EventID).Errorf(
-				"Couldn't send reaction to poll: %s", err.Error(),
+		if _, err := h.Client.SendMessageEvent(event.RoomID,
+			"m.reaction", &content); err != nil {
+			logger.WithField("poll_event_id", event.ID).Errorf(
+				"Couldn't send reaction to poll: %s",
+				err.Error(),
 			)
 			return
 		}
 	}
 }
 
-// parseMessage extracts the question and choices from the given string.
-// Returns with the question and choices, and an error string to send to the room if the message isn't formatted
-// correctly.
+// parseMessage extracts the question and choices from the given
+// string.  Returns with the question and choices, and an error string
+// to send to the room if the message isn't formatted correctly.
 func (h *handler) parseMessage(body string) (question string, choices map[string]string, errMsg string) {
 	r := strings.NewReader(body)
 
@@ -163,21 +162,23 @@ func (h *handler) parseMessage(body string) (question string, choices map[string
 
 	choices = make(map[string]string)
 	firstLine := true
-	choiceErrMsg := "Each choice needs to be on a different line, and to start with an emoji."
+	choiceErrMsg := `Each choice needs to be on a different line
+             , and to start with an emoji.`
 	// Read the message line by line.
 	for scanner.Scan() {
 		line := scanner.Text()
 
 		if firstLine {
-			// If the line starts with "!poll", it's the question, otherwise it's not a message for us.
+			
 			if strings.HasPrefix(line, "!poll ") {
-				question = strings.Replace(line, "!poll ", "", 1)
+				question =
+					strings.Replace(line, "!poll ", "", 1)
 			} else {
-				// Don't send an error message since the message isn't for us.
 				return
 			}
 		} else {
-			// handle empty lines and lines containing only spaces.
+			// handle empty lines and lines containing
+			// only spaces.
 			// TODO: also remove tabs.
 			if len(h.trimStartingSpaces(line)) == 0 {
 				continue
@@ -224,37 +225,14 @@ func (h *handler) trimStartingSpaces(s string) string {
 	return s[indexes[1]:]
 }
 
-// generateNoticeHTML generates the HTML text to send as a notice to the room.
-func (h *handler) generateNoticeHTML(userID string, question string, choices map[string]string) string {
-	displayName := userID
 
-	// Try to retrieve the sender's display name from the homeserver. If we can't, use the user ID instead.
-	res, err := h.Client.GetDisplayName(userID)
-	if err == nil {
-		displayName = res.DisplayName
-	}
-
-	format := `
-	<b>Nueva pregunta de <a href="https://matrix.to/#/%s">%s</a>!</b><br><br>
-	Pregunta: <i><u>%s</u></i><br>
-	Para votar, clickear en los emojis. <br><br>
-	Opciones:<br>
-	`
-
-	notice := fmt.Sprintf(format, userID, displayName, question)
-
-	for key, value := range choices {
-		notice += fmt.Sprintf("%s: %s<br>", key, value)
-	}
-
-	return notice
-}
-
-// handleMembership handles m.room.member events, and autojoins rooms it's invited in.
+// handleMembership handles m.room.member events,
+// and autojoins rooms it's invited in.
 func (h *handler) handleMembership(event *gomatrix.Event) {
 	var joinDelay time.Duration = 1
 
-	if membership, ok := event.Content["membership"]; !ok || membership != "invite" {
+	if membership, ok :=
+		event.Content["membership"]; !ok || membership != "invite" {
 		return
 	}
 
@@ -263,7 +241,8 @@ func (h *handler) handleMembership(event *gomatrix.Event) {
 	time.Sleep(joinDelay * time.Second)
 	_, err := h.Client.JoinRoom(event.RoomID, "", struct{}{})
 	if err != nil {
-		logrus.Errorf("Failed to join room %s: %s", event.RoomID, err.Error())
+		logrus.Errorf("Failed to join room %s: %s",
+			event.RoomID, err.Error())
 	}
 
 	logrus.Infof("Successfully joined room %s", event.RoomID)
@@ -272,7 +251,8 @@ func (h *handler) handleMembership(event *gomatrix.Event) {
 func main() {
 	var cfg config
 
-	configFile := flag.String("config", "config.yaml", "Path to the configuration file")
+	configFile :=
+   flag.String("config", "config.yaml", "Path to the configuration file")
 
 	flag.Parse()
 
@@ -285,9 +265,11 @@ func main() {
 		panic(errors.Wrap(err, "Couldn't read the configuration file"))
 	}
 
-	h, err := newHandler(cfg.Matrix.HSURL, cfg.Matrix.UserID, cfg.Matrix.AccessToken)
+	h, err := newHandler(cfg.Matrix.HSURL,
+		cfg.Matrix.UserID, cfg.Matrix.AccessToken)
 	if err != nil {
-		panic(errors.Wrap(err, "Couldn't initialise the Matrix client"))
+		panic(errors.Wrap(err,
+			"Couldn't initialise the Matrix client"))
 	}
 
 	filterID := h.setupFilter()
